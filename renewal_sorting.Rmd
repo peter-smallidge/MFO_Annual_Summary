@@ -10,8 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 test
-git checkout --orphan clean-main
-git add .
+
 
 ```{r read data, echo=F, include=T, message=F, eval=T}
 # library(ggplot2)
