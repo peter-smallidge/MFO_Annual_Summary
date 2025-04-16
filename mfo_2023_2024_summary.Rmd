@@ -1,0 +1,1183 @@
+---
+title: "MFO_2022_2023_summary"
+author: "Peter Smalldige"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r, echo=FALSE, include=FALSE, message=F, eval=T}
+
+
+library(ggpubr)
+library(skimr)
+library(tidyverse)  
+    # includes: tidyr, dplyr, haven, readr, forcats, stringer, ggplot2. 
+    # See all with tidyverse_packages()
+library(readxl)
+library(expss)
+library(knitr)
+library(EnvStats) #prints sample size in graphs
+library(janitor)
+#install.packages("xlsx")
+#library(xlsx)
+library(xlsx2dfs)
+
+
+#
+# ALT plus hypen = <- (within chunk)
+# ctrl plus shift plus m = %>% 
+# ctrl + ALT + I = insert chunk
+# filter rows, select columns
+# RMD comment = <!-- comment -->
+
+
+```
+first, read data from Qualtrics into file "mfo_tidy_data.Rmd"
+include both the request data and the report data. check the acres and hours data for non-numeric values.
+filter for the correct dates within that file and export to a year-specific file.
+Read the year-specific file here
+
+```{r read data, echo=F, include=T, message=F, eval=T}
+
+#in Sept 2024, the variable "other_mfo" in the "reported" csv file was forced manually into 
+# mfo2, mfo3, and mfo4. reporting mfo is mfo1.  this file is saved as "data_reported_2023_2024_mfo.csv"
+# the output csv from "visit_report_raw_data_tidy_sept2024.Rmd" is "data_reported_2023_2024.csv"
+
+report_raw <- read_csv("data_reported_2023_2024_mfo.csv") %>% 
+  #remove duplicates
+  group_by(county_owner, reside_zip, owner_email) %>% 
+  slice_head(n=1) %>% 
+  ungroup
+
+
+request_raw <- read_csv("requested_raw_2024.csv") %>% 
+  #remove duplicates
+  group_by(county_name, lastname, email_1) %>% 
+  slice_head(n=1) %>% 
+  ungroup %>% 
+  rename(
+    county_owner = county_name,
+    CCE = cce,
+    Other = other,
+    Postcard = postcard,
+    Fair = fair,
+    NYFOA = nyfoa,
+    Forester = forester,
+    Brochure = brochure,
+    News_Radio = news_radio,
+    Agency = agency
+  )
+ 
+
+
+```
+
+
+
+Table 1 - Statewide Averages and Totals
+
+```{r, Table 1 proportion requests resident, echo=F, include=T, message=F, eval=T}
+residence_pct <- request_raw %>% 
+  select(residence, region) %>% #confirmed # distinct counties 9/24/2023
+  count(region, residence) %>% 
+  mutate(
+    freq = prop.table(n), .by = region,
+    freq = freq *100
+  ) %>% 
+  filter(residence == "yes") %>% 
+  select(!c(residence, n)) %>% 
+  rename(
+    'Live_on_Property_(pct)' = freq
+    )
+
+```
+
+table 01 statewide outputs requests
+
+```{r, table 01 statewide outputs requests, echo=F, include=T, message=F, eval=T}
+tot_request <- request_raw %>% 
+  group_by(region) %>% 
+  summarize(
+    Wooded_Acres_Requested = sum(wooded_acres, na.rm=T),
+    Number_Requests = n(),
+    Counties_With_Requests = n_distinct(county_owner, na.rm = T)
+  ) 
+
+tot_reports <- report_raw %>% 
+  group_by(region) %>% 
+  summarize(
+    Wooded_Acres_Reported = sum(wooded_acres, na.rm = T),
+    Number_of_Reports = n(),
+    Counties_With_Reports = n_distinct(county_owner, na.rm = T)
+  ) 
+
+table01a <- full_join(tot_reports, tot_request, by = join_by(region))
+
+table01 <- full_join(residence_pct, table01a,  by = join_by(region)) %>% 
+  mutate(
+    PCT_Reports = Number_of_Reports /Number_Requests *100
+  ) %>% 
+  select(region, Number_Requests, Wooded_Acres_Requested,Counties_With_Requests, 'Live_on_Property_(pct)',
+         Number_of_Reports,Wooded_Acres_Reported,Counties_With_Reports,PCT_Reports,
+        ) %>% 
+    mutate_if(is.numeric, round, 0)
+
+
+
+```
+
+TABLE 2 - Source of Information
+
+```{r, summarize source of request, , echo=F, include=T, message=F, eval=T}
+# request_raw %>% 
+#   tab_cells(mdset('news_radio' %to% 'other')) %>% 
+#   #tab_subgroup(subgroup="region") %>% 
+#   tab_stat_cases(label = "freq") %>% 
+#   tab_stat_cpct(label = "col%") %>% 
+#   tab_pivot(stat_position = "inside_columns") %>% 
+#   tab_sort_desc
+# 
+# 
+# request_raw_summ_source <- request_raw%>% 
+#   arrange(region) %>% 
+#   group_by(region) %>% 
+#   summarize(
+#     source_news_radio = sum(news_radio, na.rm =  T),
+#     source_postcard = sum(postcard, na.rm =  T),
+#     source_brochure = sum(brochure, na.rm =  T),
+#     source_fair = sum(fair, na.rm =  T),
+#     source_cce = sum(cce, na.rm =  T),
+#     source_nyfoa = sum(nyfoa, na.rm =  T),
+#     source_forester = sum(forester, na.rm =  T),
+#     source_agency = sum(agency, na.rm =  T),
+#     source_other = sum(other, na.rm =  T)
+#   )
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+table02 <- pivot_longer(request_raw, c(News_Radio, Postcard, Brochure, Fair, CCE, NYFOA, Forester, Agency, Other),
+                                names_to = "source",
+                                values_to = "count_source") %>% 
+                  pivot_wider(names_from = region, values_from = count_source) %>% 
+  arrange(id, source) %>% 
+  group_by(id,source) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  group_by(source) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier 
+  ) %>% 
+  arrange(desc(TOTAL))
+
+
+  
+```
+
+Table 3 - County and Region Request Metrics
+
+```{r,Table 3 - County and Region Request Metrics , echo=F, include=T, message=F, eval=T}
+
+
+county_count <- request_raw %>% 
+  arrange(region, county_owner) %>% 
+  group_by(region, county_owner) %>% 
+  summarize(
+    n = n(),
+    AVG_acres = mean(wooded_acres, na.rm=T),
+    TOT_acres = sum(wooded_acres, na.rm=T),
+    AVG_yrs_owned = mean(years_owned, na.rm=T)
+  ) %>% 
+  mutate_if(is.numeric, round, 0) %>% 
+  ungroup %>% 
+  group_by(region, county_owner) %>% 
+  arrange(desc(TOT_acres), .by_group = T)
+
+region_count <- request_raw %>% 
+  group_by(region) %>% 
+  summarize(
+    n = n(),
+    AVG_acres = mean(wooded_acres, na.rm=T),
+    TOT_acres = sum(wooded_acres, na.rm=T),
+    AVG_yrs_owned = mean(years_owned, na.rm=T)
+  ) %>% 
+  mutate(county_owner = "TOTAL/AVG") %>% 
+  mutate_if(is.numeric, round, 0)
+
+#region_county_request metrics
+table03 <- bind_rows(county_count, region_count) %>% 
+  arrange(region, county_owner) %>% 
+  arrange(region, n)
+
+```
+Table 4 - Why Own a Woodlot
+
+```{r, table 4 why own woodlot requests, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+why_format <- request_raw %>% 
+  rename(
+    Beauty_Scenery = reason_beauty,
+    Nature_Biodiversity = reason_nature_biodiv,
+    Privacy = reason_privacy,
+    Land_Invest = reason_landinvest,
+    Pass_to_Heirs = reason_heirs,
+    Timber_Products = reason_products,
+    Hunting = reason_hunting,
+    Recreation = reason_recreation
+  )
+
+table04 <- pivot_longer(why_format, c(Beauty_Scenery,Nature_Biodiversity,Privacy, Land_Invest,Pass_to_Heirs, 
+                                  Timber_Products,Hunting, Recreation ),
+                                names_to = "Why_Own",
+                                values_to = "count_why") %>% 
+                  pivot_wider(names_from = region, values_from = count_why) %>% 
+  arrange(id, Why_Own) %>% 
+  group_by(id,Why_Own) %>% 
+  summarize(
+    Catskill_L_Hudson = mean(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = mean(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = mean(Central_W_ADK, na.rm = T),
+    Northwest = mean(Northwest, na.rm = T),
+    Southern_Tier = mean(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(Why_Own) %>% 
+  group_by(Why_Own) %>% 
+    summarize(
+    Catskill_L_Hudson = mean(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = mean(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = mean(Central_W_ADK, na.rm = T),
+    Northwest = mean(Northwest, na.rm = T),
+    Southern_Tier = mean(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    AVERAGE = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)/5 
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(AVERAGE))
+
+    
+  
+
+```
+table 05 - Typology
+```{r, typology for Table 05, echo=F, include=T, message=F, eval=T}
+
+table05 <- request_raw %>% 
+  mutate(typol_count = 1) %>% 
+  pivot_wider(names_from = region, values_from = typol_count) %>% 
+  group_by(id, typology) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(typology) %>% 
+  group_by(typology) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier) 
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+
+
+```
+
+Table 6 - County and Region Report Metrics
+
+```{r, table 06 report acres years outputs, echo=F, include=T, message=F, eval=T }
+
+
+county_report <- report_raw %>% 
+  arrange(region, county_owner) %>% 
+  group_by(region, county_owner) %>% 
+  summarize(
+    n = n(),
+    AVG_acres = mean(wooded_acres, na.rm=T),
+    TOT_acres = sum(wooded_acres, na.rm=T),
+    AVG_yrs_owned = mean(years, na.rm=T)
+  ) %>% 
+  mutate_if(is.numeric, round, 0) %>% 
+  ungroup %>% 
+  group_by(region, county_owner) %>% 
+  arrange(desc(TOT_acres), .by_group = T)
+
+region_report <- report_raw %>% 
+  group_by(region) %>% 
+  summarize(
+    n = n(),
+    AVG_acres = mean(wooded_acres, na.rm=T),
+    TOT_acres = sum(wooded_acres, na.rm=T),
+    AVG_yrs_owned = mean(years, na.rm=T)
+  ) %>% 
+  mutate(county_owner = "TOTAL/AVG") %>% 
+  mutate_if(is.numeric, round, 0)
+
+#region_county_request metrics
+table06 <- bind_rows(county_report, region_report) %>% 
+  arrange(region, county_owner) %>% 
+  arrange(region, n)
+
+```
+
+Table 06b - hours and miles invested by MFO Volunteers
+
+
+```{r, table 06b hours and miles invested, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+invest_format <- report_raw %>% 
+  rename(
+    Hours = hours,
+    Miles_Round_Trip = miles
+                )
+
+table06b <- pivot_longer(invest_format, c(Hours, Miles_Round_Trip),
+         names_to = "invest",
+         values_to = "count_invest") %>% 
+         pivot_wider(names_from = region, values_from = count_invest) %>% 
+  arrange(id, invest) %>% 
+  group_by(id,invest) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(invest) %>% 
+  group_by(invest) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+          
+region <- table06 %>% 
+  filter(county_owner == "TOTAL/AVG") %>% 
+  pivot_wider(names_from = region, values_from = n) %>% 
+    summarize(
+    Catskill_L_Hudson = mean(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = mean(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = mean(Central_W_ADK, na.rm = T),
+    Northwest = mean(Northwest, na.rm = T),
+    Southern_Tier = mean(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(invest = "visits") %>% 
+  select(-c(county_owner))
+
+table06c <- bind_rows(table06b, region)
+
+```
+
+
+
+
+table 7 why own woodlot reports
+
+```{r, table 7 why own woodlot reports, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+why_format_report <- report_raw %>% 
+  rename(
+    Timber = timber,
+    Recreation = recreation,
+    Privacy_Rural_Setting = privacy_rural,
+    Part_of_Property = property,
+    Firewood  = firewood,
+    Wildlife_Viewing = wildlife_view,
+    Hunting = hunting,
+    Agroforestry = agrof,
+    Other = other_why
+  )
+
+table07 <- pivot_longer(why_format_report, c(Timber, Recreation, Privacy_Rural_Setting,
+                                                Part_of_Property, Firewood, Wildlife_Viewing,
+                                                Hunting, Agroforestry, Other),
+                                names_to = "Why_Own",
+                                values_to = "count_why") %>% 
+                  pivot_wider(names_from = region, values_from = count_why) %>% 
+  arrange(id, Why_Own) %>% 
+  group_by(id,Why_Own) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(Why_Own) %>% 
+  group_by(Why_Own) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+
+    
+  
+
+```
+
+Table 8 - management plans and contacting specialists
+
+```{r, table 8 management plans and contacting specialists, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+plan_spec_format <- report_raw %>% 
+  rename(
+     Plan_Written = plan_written,
+    Plan_Unwritten = plan_unwritten,
+    Plan_Intended = plan_intended,
+    No_Plan_or_Intention = plan_no,
+    Discussed_Contacting_Forester = discuss_cont_forester,
+    Discussed_Contacting_Surveyor = discuss_cont_surveyor,
+    Discussed_Contacting_Logger = discuss_cont_logger,
+    Discussed_Contacting_Entomologist = discuss_cont_entomol,
+    Discussed_Contacting_Plant_Control_Specialist = discuss_cont_fvm,
+      Discussed_Stewardship_Plans = discuss_steward,
+      Discussed_480a_Plans = discuss_480a,
+      Discussed_Estate_Legacy_Plans = discuss_estate,
+
+      )
+
+table08a <- pivot_longer(plan_spec_format, c( Plan_Written, Plan_Unwritten, Plan_Intended, No_Plan_or_Intention,
+                                              Discussed_Contacting_Forester, Discussed_Contacting_Surveyor,
+                                              Discussed_Contacting_Logger, Discussed_Contacting_Entomologist,
+                                              Discussed_Contacting_Plant_Control_Specialist,
+                                             Discussed_Stewardship_Plans,Discussed_480a_Plans, 
+                                             Discussed_Estate_Legacy_Plans),
+                                names_to = "plan_spec",
+                                values_to = "count_plan") %>% 
+                  pivot_wider(names_from = region, values_from = count_plan) %>% 
+  arrange(id, plan_spec) %>% 
+  group_by(id,plan_spec) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(plan_spec) %>% 
+  group_by(plan_spec) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(plan_spec) %>% 
+ 
+
+
+#create a dummy vector with codes to force a sort of the sequence existing from the prior chunk.
+# don't sort descending. The output should group by typie of plan
+  dummy  <- c("f", "j","h","l","k", "i","g","e","d", "c", "b", "a") %>% 
+    as.factor()
+
+  table08 <- bind_cols(table08a, dummy) %>% 
+    arrange(...8) %>% 
+    select(-c(...8))
+          
+# table08 %>% arrange(match(plan_spec,  
+#                              c("No_Plan_or_Intention","Plan_Written", "Plan_Unwritten", "Plan_Intended", 
+#                                 "Discussed_Contacting_Forester", "Discussed_Contacting_Surveyor",
+#                                 "Discussed_Contacting_Logger", "Discussed_Contacting_Entomologist",
+#                                               "Discussed_Contacting_Plant_Control_Specialist")),)
+#            
+
+         
+  
+
+  
+
+```
+
+
+
+Table 9 - Reported Discussing KASA
+
+```{r, table 9 management plans and contacting specialists, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+kasa_format <- report_raw %>% 
+  rename(
+    Discussed_Biodiversity = discuss_kasa_biodiversity,
+    Discussed_More_Deer = discuss_kasa_deermore,
+    Discussed_Deer_Impacts = discuss_kasa_deerimpacts,
+    Discussed_Regeneration = discuss_kasa_regen,
+    Discussed_Herbicides = discuss_kasa_herbicides,
+    Discussed_Hunter_Mgmt = discuss_kasa_hunters,
+    Discussed_Hunting = discuss_kasa_hunting,
+    Discussed_Veg_Mgmt = discuss_kasa_fvm,
+    Discussed_Insects = discuss_kasa_entomol,
+    Discussed_Episodic_Events = discuss_kasa_episodic,
+    Discussed_Owner_Objectives = discuss_kasa_obj,
+    Discussed_Planting_Conifers = discuss_kasa_plantconifer,
+    Discussed_Planting_Hdwds = discuss_kasa_planthdwd,
+    Discussed_Ponds = discuss_kasa_pond,
+    Discussed_Chainsaw_Safety = discuss_kasa_chainsaw,
+    Discussed_Streams = discuss_kasa_streams,
+    Discussed_Thinning_for_Productivity = discuss_kasa_thinning,
+    Discussed_Timber_Theft = discuss_kasa_theft,
+    Discussed_Trails = discuss_kasa_trails,
+    Discussed_Woodlot_Health = discuss_kasa_health,
+    Discussed_Tree_ID = discuss_kasa_dendro,
+    Discussed_Vernal_Pools = discuss_kasa_vernal,
+    Discussed_Habitat = discuss_kasa_habitat
+)
+
+table09 <- pivot_longer(kasa_format, c( Discussed_Biodiversity, Discussed_More_Deer, Discussed_Deer_Impacts, 
+                                 Discussed_Regeneration, Discussed_Herbicides, Discussed_Hunter_Mgmt, 
+                                 Discussed_Hunting, Discussed_Veg_Mgmt, Discussed_Insects, 
+                                 Discussed_Episodic_Events, Discussed_Owner_Objectives, Discussed_Planting_Conifers,
+                                 Discussed_Planting_Hdwds, Discussed_Ponds, Discussed_Chainsaw_Safety, 
+                                 Discussed_Streams, Discussed_Thinning_for_Productivity, Discussed_Timber_Theft,
+                                 Discussed_Trails, Discussed_Woodlot_Health, Discussed_Tree_ID, 
+                                 Discussed_Vernal_Pools, Discussed_Habitat),
+                                names_to = "kasa",
+                                values_to = "count_kasa") %>% 
+                  pivot_wider(names_from = region, values_from = count_kasa) %>% 
+  arrange(id, kasa) %>% 
+  group_by(id,kasa) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(kasa) %>% 
+  group_by(kasa) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+          
+
+
+```
+
+
+
+Table 10 - Reported Discussing Products
+
+```{r, table 10 Reported Discussing Products, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+product_format <- report_raw %>% 
+  rename(
+      Discussed_Producing_Timber = discuss_prod_commercial,
+      Discussed_Producing_Personal_Firewood = discuss_prod_firewoodpersonal,
+      Discussed_Producing_Commercial_Firewood = discuss_prod_firewoodcomm,
+      Discussed_Producing_Christmas_Trees = discuss_prod_Christmas,
+      Discussed_Producing_Income = discuss_prod_income,
+      Discussed_Producing_Maple = discuss_prod_maple,
+      Discussed_Producing_Mushrooms = discuss_prod_mushrooms,
+      Discussed_Producing_Silvopasture = discuss_prod_silvopasture,
+      Discussed_Producing_Ginseng = discuss_prod_ginseng
+
+    )
+
+table10 <- pivot_longer(product_format, c(Discussed_Producing_Timber, Discussed_Producing_Personal_Firewood,
+                                       Discussed_Producing_Commercial_Firewood, Discussed_Producing_Christmas_Trees,
+                                       Discussed_Producing_Income, Discussed_Producing_Maple, 
+                                       Discussed_Producing_Mushrooms, Discussed_Producing_Silvopasture, 
+                                       Discussed_Producing_Ginseng,  ),
+                                names_to = "product",
+                                values_to = "count_product") %>% 
+                  pivot_wider(names_from = region, values_from = count_product) %>% 
+  arrange(id, product) %>% 
+  group_by(id,product) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(product) %>% 
+  group_by(product) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+          
+
+
+```
+
+
+
+
+Table 11 - Actions - administrative
+
+```{r, table 11 Anticipated Administrative Actions, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+admin_format <- report_raw %>% 
+  rename(
+     act_Contact_Forester = action_cont_forester,
+     act_Contact_Surveyor = action_cont_surveyor,
+     act_Contact_Logger = action_cont_logger,
+     act_Contact_Entomologist = action_cont_entomol,
+     act_Contact_Plant_Control_Specialist = action_cont_fvm,
+     act_Write_Mgmt_Plan = action_mgmtplan,
+     act_Write_Estate_Plan = action_estateplan,
+     act_Write_Owner_Objectives = action_writeobj,
+     act_Obtain_Cost_Share = action_costshare,
+     act_Contact_Land_Trust = action_contactlandtrust,
+     act_Contact_Estate_Planner = action_contactestateplanner
+    )
+
+table11 <- pivot_longer(admin_format, c(
+    act_Contact_Entomologist, act_Contact_Estate_Planner, act_Contact_Forester, 
+    act_Contact_Land_Trust, act_Contact_Logger, act_Contact_Plant_Control_Specialist, 
+    act_Contact_Surveyor, act_Obtain_Cost_Share, act_Write_Estate_Plan, 
+    act_Write_Mgmt_Plan, act_Write_Owner_Objectives, 
+),
+                                names_to = "admin",
+                                values_to = "count_admin") %>% 
+                  pivot_wider(names_from = region, values_from = count_admin) %>% 
+  arrange(id, admin) %>% 
+  group_by(id,admin) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(admin) %>% 
+  group_by(admin) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(admin) %>% 
+  arrange(desc(TOTAL))
+          
+
+#create a dummy vector with codes to force a sort of the sequence existing from the prior chunk.
+#this requires loading the alpha characters in the correct sequence to sort "descending". Rather used the 
+#code "arrange(desc(TOTAL)).  
+  dumm11  <- c("i", "f", "d", "g", "j", "h", "e", "k", "c", "b", "a") %>% 
+    as.factor()
+
+  table11z <- bind_cols(table11a, dumm11) %>% #there are 7 columns plus dumm11 which is eight
+    arrange(...8) %>% 
+    select(-c(...8))
+
+
+```
+
+
+
+Table 12 - Actions - management
+
+```{r, table 12 Anticipated Management and Production Actions, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+mgmt_format <- report_raw %>% 
+  rename(
+     Prune_Release_Apple_Trees = action_mgmt_apple,
+     Install_Deer_Fence = action_mgmt_deerfence,
+     Increase_Deer_Hunting = action_mgmt_deerhunting,
+     Use_Collect_Firewood = action_mgmt_firewood,
+     Install_Food_Plots = action_mgmt_foodplots,
+     Monitor_Forest_Insects = action_mgmt_insects,
+     Arrange_Commercial_Harvest = action_mgmt_commercialharvest,
+     Harvest_Personal_Timber = action_mgmt_personalharvest,
+     FVM_Chemical = action_mgmt_fvm_chem,
+     FVM_Mechanical = action_mgmt_fvm_mech,
+     Create_Manage_Ponds = action_mgmt_pond,
+     Thin_Woods = action_mgmt_thinning,
+     Participate_Timber_Contest = action_mgmt_growtimber,
+     Manage_Create_Trails = action_mgmt_trails,
+     Plantation_Establishment = action_mgmt_plantationestablish,
+     Plantation_Protection = action_mgmt_plantationprotection,
+     Mgmt_Vernal_Pools = action_mgmt_vernal,
+     Mgmt_BMPs = action_mgmt_bmp,
+     Mgmt_Habitat = action_mgmt_habitat,
+     Produce_Firewood = action_prod_firewood,
+     Produce_Hunting_Lease = action_prod_huntlease,
+     Produce_Maple = action_prod_maple,
+     Produce_Ginseng = action_prod_ginseng,
+     Produce_Mushrooms = action_prod_mushrooms,
+     Produce_Silvopasture = action_prod_silvopasture,
+     Produce_Timber = action_prod_timber,
+     Manage_Hunters = action_managehunters,
+     Survey_Property = action_survey,
+     Mark_Property_Boundaries = action_boundaries
+    )
+
+table12 <- pivot_longer(mgmt_format, c(
+    Prune_Release_Apple_Trees, Install_Deer_Fence, Increase_Deer_Hunting, Use_Collect_Firewood, 
+    Install_Food_Plots, Monitor_Forest_Insects, Arrange_Commercial_Harvest, Harvest_Personal_Timber, 
+    FVM_Chemical, FVM_Mechanical, Create_Manage_Ponds, Thin_Woods, Participate_Timber_Contest, 
+    Manage_Create_Trails, Plantation_Establishment, Plantation_Protection, Mgmt_Vernal_Pools, 
+    Mgmt_BMPs, Mgmt_Habitat, Produce_Firewood, Produce_Hunting_Lease, Produce_Maple, Produce_Ginseng, 
+    Produce_Mushrooms, Produce_Silvopasture, Produce_Timber, Manage_Hunters, Survey_Property, 
+    Mark_Property_Boundaries
+    ),
+                                names_to = "mgmt",
+                                values_to = "count_mgmt") %>% 
+                  pivot_wider(names_from = region, values_from = count_mgmt) %>% 
+  arrange(id, mgmt) %>% 
+  group_by(id,mgmt) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(mgmt) %>% 
+  group_by(mgmt) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+          
+# 
+# #create a dummy vector with codes to force a sort of the sequence existing from the prior chunk.
+#   dumm11  <- c("i", "f", "d", "g", "j", "h", "e", "k", "c", "b", "a") %>% 
+#     as.factor()
+# 
+#   table11 <- bind_cols(table11a, dumm11) %>% 
+#     arrange(...8) %>% 
+#     select(-c(...8))
+
+
+```
+
+
+
+
+Table 13 - Education Preferences
+
+```{r, table 13 Education Preferences, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+educ_format <- report_raw %>% 
+  rename(
+     educ_NYFOA = educ_nyfoa,
+     educ_Events_and_Workshops = educ_events,
+     educ_Written_Material_Print = educ_written,
+     educ_Written_Material_Internet = educ_internet,
+     educ_Webinars_and_Video = educ_webinars,
+        )
+
+table13 <- pivot_longer(educ_format, c(
+    educ_NYFOA, educ_Events_and_Workshops, educ_Written_Material_Print, 
+    educ_Written_Material_Internet, educ_Webinars_and_Video
+      ),
+                                names_to = "educ",
+                                values_to = "count_educ") %>% 
+                  pivot_wider(names_from = region, values_from = count_educ) %>% 
+  arrange(id, educ) %>% 
+  group_by(id,educ) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(educ) %>% 
+  group_by(educ) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+          
+# 
+# #create a dummy vector with codes to force a sort of the sequence existing from the prior chunk.
+#   dumm11  <- c("i", "f", "d", "g", "j", "h", "e", "k", "c", "b", "a") %>% 
+#     as.factor()
+# 
+#   table11 <- bind_cols(table11a, dumm11) %>% 
+#     arrange(...8) %>% 
+#     select(-c(...8))
+
+
+```
+
+Table 14 - Education Preferences
+
+```{r, table 14 Education Preferences, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+educ_format <- report_raw %>% 
+  rename(
+     Member_of_NYFOA = member_nyfoa,
+     Member_of_CFA = member_cfa,
+     Member_of_Tree_Farm = member_treefarm,
+     Member_of_TNC = member_tnc,
+     Member_of_Land_Trust = member_landtrust,
+     Member_of_Audubon = member_audubon,
+     Member_of_Ruffed_Grouse_Society = member_rgs,
+     Member_of_Natl_Wild_Turkey = member_nwtf,
+     Member_of_Amer_Chestnut_Foundation = member_tacf,
+     Member_of_Sierra_Club = member_sc,
+     Member_of_none_listed = member_na
+            )
+
+table14 <- pivot_longer(educ_format, c(
+    Member_of_NYFOA, Member_of_CFA, Member_of_Tree_Farm, Member_of_TNC, 
+    Member_of_Land_Trust, Member_of_Audubon, Member_of_Ruffed_Grouse_Society,
+    Member_of_Natl_Wild_Turkey, Member_of_Amer_Chestnut_Foundation,
+    Member_of_Sierra_Club, Member_of_none_listed, 
+
+        ),
+                                names_to = "educ",
+                                values_to = "count_educ") %>% 
+                  pivot_wider(names_from = region, values_from = count_educ) %>% 
+  arrange(id, educ) %>% 
+  group_by(id,educ) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(educ) %>% 
+  group_by(educ) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+          
+# 
+# #create a dummy vector with codes to force a sort of the sequence existing from the prior chunk.
+#   dumm11  <- c("i", "f", "d", "g", "j", "h", "e", "k", "c", "b", "a") %>% 
+#     as.factor()
+# 
+#   table11 <- bind_cols(table11a, dumm11) %>% 
+#     arrange(...8) %>% 
+#     select(-c(...8))
+
+
+```
+
+Table 15 - Plan to Join
+
+```{r, table 15 Education Preferences, echo=F, include=T, message=F, eval=T}
+
+
+#each of the sources of information about the MFO program was a variable. Pivot long
+join_format <- report_raw %>% 
+  rename(
+     Will_join_NYFOA = join_nyfoa,
+     Will_join_CFA = join_cfa,
+     Will_join_Tree_Farm = join_treefarm,
+     Will_join_TNC = join_tnc,
+     Will_join_Land_Trust = join_landtrust,
+     Will_join_Audubon = join_audubon,
+     Will_join_Ruffed_Grouse_Society = join_rgs,
+     Will_join_Natl_Wild_Turkey = join_nwtf,
+     Will_join_Amer_Chestnut_Foundation = join_tacf,
+     Will_join_Sierra_Club = join_sc,
+     Will_join_none_listed = join_na,
+            )
+
+table15 <- pivot_longer(join_format, c(
+    Will_join_NYFOA, Will_join_CFA, Will_join_Tree_Farm, Will_join_TNC, 
+    Will_join_Land_Trust, Will_join_Audubon, Will_join_Ruffed_Grouse_Society,
+    Will_join_Natl_Wild_Turkey, Will_join_Amer_Chestnut_Foundation,
+    Will_join_Sierra_Club, Will_join_none_listed, 
+
+        ),
+                                names_to = "join",
+                                values_to = "count_join") %>% 
+                  pivot_wider(names_from = region, values_from = count_join) %>% 
+  arrange(id, join) %>% 
+  group_by(id,join) %>% 
+  summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  ungroup %>% 
+  arrange(join) %>% 
+  group_by(join) %>% 
+    summarize(
+    Catskill_L_Hudson = sum(Catskill_L_Hudson, na.rm = T),
+    Capital_E_ADK = sum(Capital_E_ADK, na.rm = T),
+    Central_W_ADK = sum(Central_W_ADK, na.rm = T),
+    Northwest = sum(Northwest, na.rm = T),
+    Southern_Tier = sum(Southern_Tier, na.rm = T)
+  ) %>% 
+  mutate(
+    TOTAL = (Catskill_L_Hudson +Capital_E_ADK+ Central_W_ADK+Northwest+Southern_Tier)
+  ) %>% 
+  mutate_if(is.numeric, round, 1) %>% 
+  arrange(desc(TOTAL))
+          
+
+
+```
+
+volunteer tabulation
+```{r}
+volunteer01 <- read_csv("data_reported_2023_2024_mfo.csv") %>%  
+  select(mfo1, mfo2, mfo3, mfo4, mfo5, county_mfo)
+
+vol1 <- volunteer01 %>% 
+  select(mfo1, county_mfo) %>% 
+  rename(mfo = mfo1) %>% 
+  drop_na(mfo)
+
+vol2 <- volunteer01 %>% 
+  select(mfo2) %>% 
+  rename(mfo = mfo2) %>% 
+  drop_na(mfo)
+
+vol3 <- volunteer01 %>% 
+  select(mfo3) %>% 
+  rename(mfo = mfo3) %>% 
+  drop_na(mfo)
+
+vol4 <- volunteer01 %>% 
+  select(mfo4) %>% 
+  rename(mfo = mfo4) %>% 
+  drop_na(mfo)
+
+vol5 <- volunteer01 %>% 
+  select(mfo5) %>% 
+  rename(mfo = mfo5) %>% 
+  drop_na(mfo)
+
+
+vol_back_up <- bind_rows(vol1, vol2, vol3, vol4, vol5)
+
+
+# tot_reports <- report_raw %>% 
+#   summarize(
+#     Wooded_Acres_Reported = sum(wooded_acres),
+#     Number_of_Reports = n_distinct(county)
+
+
+vol_cap <- vol_back_up %>% 
+    filter(county_mfo  %in% c("Albany", "Clinton", "Essex", "Franklin", "Fulton", "Hamilton", 
+                           "Montgomery", "Rensselaer", "Saratoga", "Schenectady", "Warren", 
+                           "Washington")) %>% 
+    mutate(region = "Capital_E_ADK")
+
+vol_cat <- vol_back_up %>% 
+    filter(county_mfo  %in% c("Columbia","Delaware","Dutchess","Greene","Orange",
+                           "Otsego","Putnam","Rockland","Schoharie","Sullivan","Ulster","Westchester",
+                           "New York City")) %>% 
+    mutate(region = "Catskill_L_Hudson")
+
+vol_cent <- vol_back_up %>% 
+  filter(county_mfo  %in% c("Cayuga","Herkimer","Jefferson","Lewis","Madison",
+                           "Oneida","Onondaga","Oswego","St Lawrence" )) %>% 
+  mutate(region = "Central_W_ADK")
+
+vol_north <- vol_back_up %>% 
+  filter(county_mfo  %in% c("Erie","Genesee","Livingston","Monroe",
+                           "Niagara","Ontario","Orleans","Seneca","Wayne","Wyoming","Yates")) %>% 
+  mutate(region = "Northwest")
+
+vol_south <- vol_back_up %>% 
+  filter(county_mfo  %in% c("Allegany","Broome","Cattaraugus","Chautauqua",
+                           "Chemung","Chenango","Cortland","Schuyler","Steuben",
+                           "Tioga","Tompkins")) %>% 
+  mutate(region = "Southern_Tier")
+
+vol_names <- bind_rows(vol_cap, vol_cat, vol_cent, vol_north, vol_south ) %>% 
+  count(mfo, region) %>% 
+  mutate(
+      output = paste(mfo, n, sep = " - ")
+  ) %>% 
+   arrange(region, desc(n)) %>% 
+  pivot_wider(names_from = region, values_from = output) %>% 
+  select(!c(mfo, n))
+
+```
+ po_box = paste(prefix, pobox, sep = " ")
+
+
+Write to sheets of Excel File
+```{r}
+#  REQUEST TABLES
+# table01 = statewide metrics, request
+# table02 = source of requests
+# table03 = region and county acre and count outputs
+# table04 = why own land by region
+# table05 = typology
+##
+# REPORT TABLES
+# table06 = region and county acres and count outputs
+# table06c = volunteer investments
+# table07 = reported, why own woodlots
+# table08 = report of plans and discuss contacting specialists
+# table09 = report of KASA discussions
+# table10 = report discussing products
+# table11 = report of actions on admin tasks
+# table12 = report of actions on management and productive outputs
+# table13 = report of preference for education and networking
+# table14 = report of membership
+
+dfs2xlsx(withNames("state wide metrics request", table01,
+                   "source of requests", table02,
+                   "region and county outputs", table03,
+                   "why own land", table04,
+                   "typology", table05,
+                   "report acres years outputs", table06,
+                   "investments", table06c,
+                   "report why own", table07,
+                   "plans and specialists", table08,
+                   "kasa discussed", table09,
+                   "products discussed", table10,
+                   "admin tasks", table11,
+                   "mgmt tasks", table12,
+                   "educ", table13,
+                   "membership", table14,
+                   "join", table15,
+                   "vol names", vol_names #no comma after last df name, before paren 
+                         ), "summary_of_data_R_output_2023_2024.xlsx")
+
+
+df1 <- data.frame(genes = c("gene1", "gene2"),
+                  count = c(23,  50))
+df2 <- data.frame(genes = c("gene3", "gene4"),
+                  count = c(100, 500))
+# write one data frame on one sheet
+dfs2xlsx(withNames("first sheet", df1), "../inst/extdata/test_one_df.xlsx")
+
+# write more data frames into one file. "withNames adds names to worksheets. 
+# no comma after last df name before the paren
+dfs2xlsx(withNames("first data frame", df1,
+                   "second data frame", df2), "../inst/extdata/test_two_dfs.xlsx")
+
+
+```
+
+
+
+

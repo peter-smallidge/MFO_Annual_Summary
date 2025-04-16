@@ -1,0 +1,443 @@
+---
+title: "MFO renewal sorting"
+author: "Peter Smalldige"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+test
+git checkout --orphan clean-main
+git add .
+
+```{r read data, echo=F, include=T, message=F, eval=T}
+# library(ggplot2)
+# library(ggpubr)
+# library(expss)
+library(readr)
+library(readxl)
+library(writexl)
+# library(skimr)
+ library(tidyverse)  # includes: tidyr, dplyr, haven, readr, readxl, forcats, stringer, ggplot2. See all with tidyverse_packages()
+# library(knitr)
+# library(janitor)
+
+```
+
+
+```{r echo = FALSE}
+# Create Paths
+file_path_input <- "C:\\Users\\pjs23\\Documents\\R\\MFO_Annual_Summary\\Renewal data\\renewal_2025\\database_2024.xlsx"
+#initil commit to git on 15 april 2025
+
+output_folder <- "C:\\Users\\pjs23\\Documents\\R\\MFO_Annual_Summary\\Renewal data\\renewal_2025"
+
+```
+
+Baseline, last year's volunteer list
+```{r read data, echo=F, include=T, message=F, eval=T}
+
+#the data from the 2024 database of active and inactive volunteers. The list of last year's volunteers.
+vol_last_year <- read_excel(file_path_input, sheet = "volunteers_2024", skip=0) %>%
+  mutate(
+    count =1,
+    email = tolower(email),
+    source = "original"
+  ) %>% 
+  mutate(email = str_remove_all(email, "[; ]")) %>% #removes blanks and ; from the email varaible
+  select(first, last, email, source, count, region) %>% 
+  arrange(email, region) %>% 
+  group_by(email) %>% 
+  summarize(
+    first = first(first),
+    last = first(last),
+    email = first(email),
+    source = first(source),
+    count = first(count),
+    region = first(region)
+  ) %>% 
+  mutate(
+    region = str_to_lower(region),  # Convert to lowercase
+    region = case_when(
+      str_detect(region, "capital") ~ "capital/E_ADK",
+      str_detect(region, "southern") ~ "southern",
+      str_detect(region, "northwest") ~ "northwest",
+      str_detect(region, "central") ~ "central/W_ADK",
+      str_detect(region, "catskill") ~ "catskill/L_HDS",
+      TRUE ~ region  # Keep as is if no match
+    )
+  )
+
+
+```
+
+```{r read data, echo=F, include=T, message=F, eval=T}
+
+# Obtain the responses from the qualtrics survey. Export and copy into a new sheet named "renewed_2025". 
+# Update the worksheet from the Qualtrics output file. Save the previous worksheet as a backup, or delete.
+renewed <- read_excel(file_path_input, sheet = "renewed_2025", col_names = FALSE, skip = 4) %>% 
+ rename(
+    date = 1,
+    first = 2,
+    last = 3,
+    status = 4,
+    apprehension = 5,
+    county = 6,
+    no_additional = 7,
+    #additional county list columns 8 - 69
+    region = 70,
+    address = 71,
+    property_address = 72,
+    phone_home = 73,
+    phone_cell = 74,
+    landline = 75,
+    cell_line = 76,
+    email1 = 77,
+    email2 = 78,
+    email_spouse = 79
+  ) %>%
+  mutate(email1 = str_remove_all(email1, "[; ]")) %>% #removes blanks from the email1 variable
+  mutate(email2 = str_remove_all(email2, "[; ]")) %>% #removes blanks from the email2 variable
+  mutate(email_spouse = str_remove_all(email_spouse, "[; ]")) %>% #removes blanks from the email_spouse variable
+  mutate(
+    issue = "",
+    count = 1,
+    source = "responded",
+    email1 = tolower(email1),
+    email2 = tolower(email2),
+    email_spouse = tolower(email_spouse)
+    ) %>% 
+  #filter(! is.na(email1)) %>%  
+  mutate(
+    issue = case_when(
+      email1 == email2 ~ "none",
+      TRUE ~ "yes"
+  )) %>% 
+  rename(email = email1) %>% 
+  mutate(
+    region = str_to_lower(region),  # Convert to lowercase
+    region = case_when(
+      str_detect(region, "capital") ~ "capital/E_ADK",
+      str_detect(region, "southern") ~ "southern",
+      str_detect(region, "northwest") ~ "northwest",
+      str_detect(region, "central") ~ "central/W_ADK",
+      str_detect(region, "catskill") ~ "catskill/L_HDS",
+      TRUE ~ region  # Keep as is if no match
+    )
+  )
+
+
+renewed2 <- renewed %>% # a simple version for comparison to the 2024 list. Use the long df for use in 2025. Will need to make it tidy.
+  select(first, last, email, email_spouse, source, count, region)
+
+bad_email <- renewed %>% 
+  filter(issue == "yes")
+
+```
+
+
+```{r}
+
+# name the clusters of columns for future reference
+
+ countynames <- names(renewed)[8:69]
+ phonedetails <- names(renewed)[104:108]
+# distance <- names(renewed)[109]
+ mgmtlist <- names(renewed)[110:134]
+ textdetails <- names(renewed)[99:103]
+ emaildetails <- names(renewed)[94:98]
+ contacting <- names(renewed)[88:93]
+ acre_range <- names(renewed)[81:86]
+ 
+# change the unlabeled columns to something meaningful so the regional directors
+# can easily access the data for the current volunteers.
+# 
+ 
+final <- renewed %>% 
+  #albany = col 08, yates = col 69, "no additional counties" = col 07
+
+  rename(
+    numb_visits = '...80',
+    team_pref = '...87',
+    distance_pref = '...109',
+    other_info = "...135",
+    land_line = landline
+  ) %>% 
+
+  
+ mutate(across(countynames, as.character)) %>%        # Convert columns 8–69 to character
+ unite("addl_counties", all_of(countynames), sep = ", ", na.rm = TRUE) %>%   # Concatenate, skipping NAs. Unite drops the original counties
+
+ # mutate(across(acre_range, as.character)) %>% 
+ #  unite("acre_pref", all_of(acre_range), sep = "; ", na.rm = TRUE) %>% 
+  
+# separate out the smallest and largest of acre preferences, and ignore those in the middle.
+# Concatenate with "x to y"
+
+
+  mutate(across(all_of(acre_range), ~ str_trim(as.character(.)))) %>%  # trim whitespace
+  unite("acre_pref", all_of(acre_range), sep = "; ", na.rm = TRUE) %>%
+
+  
+mutate(
+  acre_pref_split = str_split(acre_pref, "; "),
+  acre_pref_range = map_chr(acre_pref_split, ~ {
+    values <- na.omit(.x) %>% str_trim()
+    if (length(values) == 0) return(NA_character_)
+    if (length(values) == 1) return(values)
+    paste0("(", values[1], ") to (", values[length(values)], ")")
+  })
+) %>%     
+    
+    # acre_pref_range = map_chr(acre_pref_split, ~ {
+    #   values <- na.omit(.x) %>% str_trim()
+    #   if (length(values) == 0) return(NA_character_)
+    #   if (length(values) == 1) return(values)
+    #   paste0(values[1], " to ", values[length(values)])
+    # })
+
+  
+ # mutate(across(distance, as.character)) %>% 
+ #  unite("distance_trvl", all_of(distance), sep = "; ", na.rm = TRUE) %>% 
+
+ mutate(across(phonedetails, as.character)) %>% 
+  unite("phone_check", all_of(phonedetails), sep = "; ", na.rm = TRUE) %>% 
+  
+ mutate(across(textdetails, as.character)) %>% 
+  unite("text_check", all_of(textdetails), sep = "; ", na.rm = TRUE) %>% 
+  
+ mutate(across(emaildetails, as.character)) %>% 
+  unite("email_check", all_of(emaildetails), sep = "; ", na.rm = TRUE) %>% 
+  
+ mutate(across(contacting, as.character)) %>% 
+  unite("contact_me", all_of(contacting), sep = "; ", na.rm = TRUE) %>% 
+  
+  mutate(across(mgmtlist, as.character)) %>% 
+  unite("mgmt_expr", all_of(mgmtlist), sep = "; ", na.rm = TRUE) %>% 
+  
+
+    # this code isn't needed.  The "unite" function removes the columns used to merge
+  # select(additional_counties, everything()) %>% 
+  #   select(-c('...110': '...134')) %>% 
+  #   select(-c('...104': '...108')) %>% 
+  #   select(-c('...99':'...103')) %>% 
+  #   select(-c('...94': '...98')) %>% 
+  #   select(-c('...88': '...93')) %>% 
+  #   select(-c('...81': '...86')) %>% 
+  #   select(-c(`...8`:`...69`)) %>% 
+
+  
+  mutate(
+    land_line = str_remove_all(land_line, "\\D"),  # Remove all non-numeric characters
+    land_line = str_replace(land_line, "(\\d{3})(\\d{3})(\\d{4})", "(\\1) \\2-\\3")  # Format as (XXX) XXX-XXXX
+  ) %>% 
+  
+  mutate(
+    cell_line = str_remove_all(cell_line, "\\D"),  # Remove all non-numeric characters
+    cell_line = str_replace(cell_line, "(\\d{3})(\\d{3})(\\d{4})", "(\\1) \\2-\\3")  # Format as (XXX) XXX-XXXX
+  ) %>% 
+  
+    
+  select(date, first, last, region, status, apprehension, county, addl_counties,
+         address, property_address, contact_me, land_line, cell_line, email, email_spouse, 
+         phone_check, text_check, email_check, numb_visits, 
+         team_pref, distance_pref, acre_pref, acre_pref_range, 
+         mgmt_expr, other_info) %>% 
+  arrange(status, region, county, last)
+  
+
+```
+
+
+
+
+```{r}
+#change the name of the output file to today's date
+output_file <- file.path(output_folder, paste0("MFO_data_14april2025", ".xlsx"))
+
+write_xlsx(final, output_file)
+```
+
+
+
+
+
+1. Identify respondents
+2. Remove respondents from the original request.
+3. Write file of non_respondents and resend email.
+
+```{r read data, echo=F, include=T, message=F, eval=T}
+
+#sort and filter respondents based on primary email address
+respondents <- bind_rows(renewed2, vol_last_year) %>% 
+  arrange(email, desc(source)) %>% # sorts SOURCE=original before SOURCE=responded, so reverse sort "source"
+  group_by(email) %>% 
+  summarize(
+    region = first(region),
+    source = first(source), #keeps first value of source=original
+    first = first(first), # keeps "first" name
+    last = first(last), #keeps "last" name 
+    email_spouse = first(email_spouse),
+    total = sum(count), #for those in the emailed and response data, total will equal 2
+    .groups = "drop"
+    )
+
+#sort and filter respondents based on email_spouse address
+spouse <- bind_rows(renewed2, vol_last_year) %>%
+  arrange(email, desc(source)) %>% # sorts SOURCE=original before =responded
+  group_by(email) %>% 
+  summarize(
+    region = first(region),
+    source = first(source), #keeps first value of source=original
+    first = first(first), # keeps "first" name
+    last = first(last), #keeps "last" name 
+    total = sum(count), #for those in the emailed and response data, total will equal 2
+    email_spouse = first(email_spouse),
+    .groups = "drop"
+    ) %>% 
+  #remove when total =2, drop if email_spouse is NA
+  filter(!(total == 2 & is.na(email_spouse))) %>% 
+  filter(!(email == email_spouse)) %>% # removes rows where the volunteer included their email as "email for spouse"
+  select(!c(email, total, source)) %>%
+  select(first, last, email_spouse) %>% 
+  rename(email = email_spouse) %>% 
+  mutate(
+    source = "spouse",
+    count = 1
+  ) %>% 
+  bind_rows(vol_last_year) %>%     # add back the original volunteer list
+  #   arrange(email, desc(source)) %>%     # sorts SOURCE=spouse before =original
+  # group_by(email) %>% 
+  filter(source == "spouse")
+
+lastname <- bind_rows(renewed2, vol_last_year) %>%
+  arrange(last, desc(source)) %>% # sorts SOURCE=original before =responded
+  group_by(last) %>% 
+  summarize(
+    region = first(region),
+    email = first(email),
+    source = first(source), #keeps first value of source=original
+    first = first(first), # keeps "first" name
+    last = first(last), #keeps "last" name 
+    total = sum(count), #for those in the emailed and response data, total will equal 2
+    .groups = "drop"
+    ) %>% 
+  filter(total > 1) %>% 
+  select(email, source, first, last, region)
+
+
+ # merge df=respondents with df=spouse. df=respondents includes responded and original. "original" not yet responded.
+ # Removing those who responded retains spouse and original. Combine spouse and original, filter those where total >1
+ # some volunteers listed a secondary email in the "spouse" field (e.g., Goff, Farber). Recode those to responded.
+ # total the count for group_by email and remove total > 1 and "responded"  Residual data are non respondents.
+ # 
+no_response <- bind_rows(respondents, spouse) %>% 
+  select(!c(email_spouse, total, count)) %>% 
+ # filter(!(source == "responded" )) %>% 
+  mutate(source = if_else(source == "spouse", "responded", source)) %>%  #if source = "spouse" then change source to "responded"
+      #this is for people who have two emails, one they added to the spouse field e.g., Goff, Farber. Filter below removes those who  "responded"
+  ungroup() %>% 
+  mutate(
+    count = 1, 
+    email = tolower(email)
+  ) %>% 
+  arrange(email, desc(source)) %>% 
+  group_by(email) %>% 
+  summarize(
+    region = first(region),
+    source = first(source),
+    first = first(first),
+    last = first(last),
+    total = sum(count),
+    .groups = "drop"
+  ) %>% 
+  filter(!(total > 1 | source == "responded")) %>% 
+#  filter(!(email == "janisby@gmail.com" | email == "troy.weldy@clctrust.org")) %>% 
+
+# bind rows of lastname to extract respondents who changed their email address between last year and this year (e.g., Walt Williamson)
+  bind_rows(lastname) %>% 
+  mutate(
+    count = 1,
+    email = tolower(email)
+  ) %>% 
+  select(-total) %>% 
+  arrange(last, desc(source)) %>% 
+  group_by(last) %>% 
+  summarize(
+    region = first(region),
+    source = first(source),
+    first = first(first),
+    last = first(last),
+    email = first(email),
+    total = sum(count),
+    .groups = "drop"
+  ) %>% 
+  #Remove if source = "responded". The use of "total" will capture parent/child volunteers (e.g., Aujero) who have not responded.
+  #From the df=lastname, the source == "responded" for those who changed their email address (e.g., Williamson)
+  filter(!(source=="responded")) %>% 
+  select(region, email, first, last) %>% 
+  arrange(region,last)
+
+
+```
+
+```{r}
+#change the name of the output file to today's date
+output_file <- file.path(output_folder, paste0("nonrespondents11april2025", ".xlsx"))
+
+write_xlsx(no_response, output_file)
+           
+```
+
+
+
+# Construct the full file path
+output_file_ <- file.path(output_folder, paste0(webinar_name, "_CEU_1.xlsx"))
+
+# Write the CEU_1 data frame to the specified path
+write_xlsx(CEU_1, output_file_ceu)
+
+
+# Construct the full file path
+output_file_ceu <- file.path(output_folder, paste0(webinar_name, "_CEU_1.xlsx"))
+
+# Write the CEU_1 data frame to the specified path
+write_xlsx(CEU_1, output_file_ceu)
+
+
+Final Sorting...determine who needs to be called.
+
+```{r read data, echo=F, include=T, message=F, eval=F}
+
+# combine the nonrespondent data with the original data file to 
+# indicate who needs to be called
+
+nonrespondents2 <- nonrespondents %>% 
+  select(email, source, count)
+
+
+missing <- bind_rows(nonrespondents2, active) %>% 
+  arrange (source) %>% 
+  group_by(email ) %>% 
+  summarize(
+    #source = first(source), #keeps first value of source=active and replaces the alternate value of
+                             # subsequent levels of the value of source
+    total = sum(count), #for those in the emailed and response data, total will equal 2
+    across (everything())
+  ) %>% 
+  filter (total >1) %>% 
+  arrange(desc(source)) %>% 
+  summarize(
+    source= first(source),
+    across (everything())
+  ) %>% 
+  drop_na(first) %>% 
+  select(region, source, county, first, last, homephone, cellphone, email)
+
+write.csv(missing, "missing-actives_6march.csv")
+
+```
+

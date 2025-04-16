@@ -1,0 +1,398 @@
+---
+title: "MFO_visit_request_input"
+author: "Peter Smalldige"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
+
+
+
+
+The first set of code reads and makes wide the summary reports.
+The second set of code, about line # 444, reads and makes wide the visit request data.
+
+```{r, echo=FALSE, include=FALSE, message=F, eval=T}
+
+
+library(ggpubr)
+library(skimr)
+library(tidyverse)  
+    # includes: tidyr, dplyr, haven, readr, forcats, stringer, ggplot2. 
+    # See all with tidyverse_packages()
+library(readxl)
+library(expss)
+library(knitr)
+library(EnvStats) #prints sample size in graphs
+library(janitor)  #provides "clean_names()
+
+
+
+#
+# ALT plus hypen = <- (within chunk)
+# ctrl plus shift plus m = %>% 
+# ctrl + ALT + I = insert chunk
+# filter rows, select columns
+# RMD comment = <!-- comment -->
+
+
+```
+DATA PREPARATION
+
+The data files from the MFO qualtrics should be downloaded and saves as *.xlxs file type.
+Download the data as "choice text" and another file for "numeric". 
+Retain all header lines.  
+Delete the dates that won't be included in the report.
+Clean the alpha characters from "acres" and "years"
+
+```{r read visit request data, echo=F, include=T, message=F, eval=T}
+
+
+
+#read01_choice <- read_excel("visit_request_start_thru_sept2023.xlsx", skip=2, col_names = F)  
+
+#read02_choice <- read_excel("visit_request_start_thru_sept2023.xlsx", n_max = 1) %>%   [n_max will limit the number of rows read]
+#  clean_names()
+
+#write_csv(read02_choice, "request_variable_names_choice.csv")
+
+read01_numeric <- read_excel("visit_request_data_numeric_sept2023_august2024.xlsx", skip=2, col_names = F)
+  # "skip=2" ignores the first two rows.
+  # [col_names = F treats first row as data and assigns columns as x1, x2, x3, etc]
+  # these effectively eliminate the three header rows
+
+read01_numeric = read01_numeric[-1,] 
+  # the [-1,] code removes the first line of the datafile, thus the columns named x1, x2, x3, etc.
+  # the resultant file is just the data
+
+read02_numeric <- read_excel("visit_request_data_numeric_sept2023_august2024.xlsx", n_max = 1) %>% 
+  clean_names() 
+  # this creates a df with the first row of qualtrics output as variable names, and the actual variable names as the data.
+  
+  read02_numeric = read02_numeric[-1,]
+  # this code "[-1,]" removes the variable names as the data and keeps the first row of the qualtrics output, renamed below.
+
+write_csv(read02_numeric, "request_variable_names_numeric_2024.csv")
+
+
+
+```
+
+rename variables...newname = oldname
+
+
+
+```{r}
+#create an output file, then assign the modified variable names to the output file
+request_data01 <- read01_numeric
+names(request_data01) <- names(read02_numeric) 
+  # note, the first two columns are dates, but appear as lat/long because of conversion from *.xlxs
+  
+# request_data01 = request_data01[-1,]    (I'm not sure why this code is here, but it removes the first data row)
+
+
+request_data <- request_data01 %>% 
+#select(-c(,9)) %>%  #this removed a variable @ column 9 with spaces that I 
+# subsequently learned how to modify with "clean_names"
+drop_na(q10) %>% 
+  rename(
+#  year = year,
+#  month = month,
+start = start_date,
+end = end_date,
+status = status,
+ip = ip_address,
+progress = progress,
+duration = duration_in_seconds,
+finished = finished,
+recorded = recorded_date,
+id = response_id,
+x1 = recipient_last_name,
+x2 = recipient_first_name,
+x3 = recipient_email,
+x4 = external_reference,
+x5 = location_latitude,
+x6 = location_longitude,
+x7 = distribution_channel,
+x8 = user_language,
+firstname = q2,
+lastname = q3,
+reside_street = q4,
+reside_address = q5,
+phone = q6,
+email_1 = q7,
+email_2 = q8,
+property_addr = q9,
+county_name = q10,
+news_radio = q11_1,
+postcard = q11_2,
+brochure = q11_9,
+fair = q11_3,
+cce = q11_4,
+nyfoa = q11_5,
+forester = q11_6,
+agency = q11_7,
+other = q11_8,
+other_detail = q12,
+total_acres = q13,
+wooded_acres = q14,
+years_owned = q15,
+reason_beauty = q23_1,
+reason_nature_biodiv = q23_2,
+reason_privacy = q23_3,
+reason_landinvest = q23_4,
+reason_heirs = q23_5,
+reason_products = q23_6,
+reason_hunting = q23_7,
+reason_recreation = q23_8,
+typology = q24,
+nyfoa_member = q18_1,
+cfa = q18_2,
+treefarm = q18_3,
+tnc = q18_4,
+land_conserv = q18_5,
+rgs = q18_6,
+nwtf = q18_7,
+tacf = q18_8,
+sc = q18_9,
+none = q18_10,
+request = q19,
+add_to_cce = q20
+) %>% 
+mutate( add_to_cce = as.factor(add_to_cce)) %>% 
+mutate(
+  add_to_cce = fct_recode(add_to_cce,
+                      "yes" = "1",
+                      "no" = "2")
+) %>% 
+  
+#convert county numbers to names
+mutate(
+  county_name = fct_recode(county_name,
+      "Albany" = "1",
+      "Allegany" = "2",
+#      "NYC_Bronx" = "3",
+      "Broome" = "4",
+      "Cattaraugus" = "5",
+      "Cayuga" = "6",
+      "Chautauqua" = "7",
+      "Chemung" = "8",
+      "Chenango" = "9",
+      "Clinton" = "10",
+      "Columbia" = "11",
+      "Cortland" = "12",
+      "Delaware" = "13",
+      "Dutchess" = "14",
+      "Erie" = "15",
+      "Essex" = "16",
+      "Franklin" = "17",
+      "Fulton" = "18",
+      "Genesee" = "19",
+      "Greene" = "20",
+      "Hamilton" = "21",
+      "Herkimer" = "22",
+      "Jefferson" = "23",
+#      "NYC_Kings" = "24",
+      "Lewis" = "25",
+      "Livingston" = "26",
+      "Madison" = "27",
+      "Monroe" = "28",
+      "Montgomery" = "29",
+#      "Nassau" = "30",
+#      "NYC_New_York" = "31",
+      "Niagara" = "32",
+      "Oneida" = "33",
+      "Onondaga" = "34",
+      "Ontario" = "35",
+      "Orange" = "36",
+      "Orleans" = "37",
+      "Oswego" = "38",
+      "Otsego" = "39",
+      "Putnam" = "40",
+#      "NYC_Queens" = "41",
+      "Rensselaer" = "42",
+#      "NYC_Richmond_Staten" = "43",
+#      "Rockland" = "44",
+      "St Lawrence" = "45",
+      "Saratoga" = "46",
+      "Schenectady" = "47",
+      "Schoharie" = "48",
+      "Schuyler" = "49",
+      "Seneca" = "50",
+      "Steuben" = "51",
+#      "Suffolk" = "52",
+      "Sullivan" = "53",
+      "Tioga" = "54",
+      "Tompkins" = "55",
+      "Ulster" = "56",
+      "Warren" = "57",
+      "Washington" = "58",
+      "Wayne" = "59",
+      "Westchester" = "60",
+      "Wyoming" = "61",
+      "Yates" = "62",
+#      "Other" = "63"
+  )
+)
+
+#create variable for residence status
+request_data$property_addr <- tolower(request_data$property_addr)  # this makes all the characters of "property_addr" into lower case "tolower"
+request_data$email_1 <- tolower(request_data$email_1)
+request_data$email_2 <- tolower(request_data$email_2)
+
+
+request_data_residence <- request_data %>% 
+  filter(property_addr == "same") %>% 
+  mutate(residence = "yes")
+
+request_data_absentee <- request_data %>% 
+  filter(!property_addr == "same") %>% 
+  mutate(residence = "no")
+
+request_data <- bind_rows(request_data_residence,request_data_absentee )
+
+```
+
+
+
+
+```{r add_region_request, echo=F, include=T, message=F, eval=T}
+capital_request <- request_data %>% 
+  filter(county_name  %in% c("Albany", "Clinton", "Essex", "Franklin", "Fulton", "Hamilton", 
+                           "Montgomery", "Rensselaer", "Saratoga", "Schenectady", "Warren", 
+                           "Washington")) %>% 
+  mutate(region = "Capital_E_ADK")
+
+catskill_request <- request_data %>% 
+  filter(county_name  %in% c("Columbia","Delaware","Dutchess","Greene","Orange",
+                           "Otsego","Putnam","Rockland","Schoharie","Sullivan","Ulster","Westchester",
+                           "New York City")) %>% 
+  mutate(region = "Catskill_L_Hudson")
+
+central_request <- request_data %>% 
+  filter(county_name  %in% c("Cayuga","Herkimer","Jefferson","Lewis","Madison",
+                           "Oneida","Onondaga","Oswego","St Lawrence" )) %>% 
+  mutate(region = "Central_W_ADK")
+
+northwest_request <- request_data %>% 
+  filter(county_name  %in% c("Erie","Genesee","Livingston","Monroe",
+                           "Niagara","Ontario","Orleans","Seneca","Wayne","Wyoming","Yates")) %>% 
+  mutate(region = "Northwest")
+
+southern_request <- request_data %>% 
+  filter(county_name  %in% c("Allegany","Broome","Cattaraugus","Chautauqua",
+                           "Chemung","Chenango","Cortland","Schuyler","Steuben",
+                           "Tioga","Tompkins")) %>% 
+  mutate(region = "Southern_Tier")
+
+
+
+report_temp_request <- bind_rows(catskill_request, central_request, northwest_request,
+                         southern_request, capital_request) %>% 
+  select(!c(start, status, ip, progress, end, duration, finished, recorded, x1, x2,
+            x3, x4, x5, x6, x7, x8)) %>% 
+  select(id, region, county_name, everything()) %>% 
+  mutate(
+  typology = fct_recode(typology,
+                      "working" = "1", #correct
+                      "income" = "5", #correct
+                      "retreat" = "4",#correct
+                      "other" = "6") #correct
+  ) %>% 
+ replace_na(list("residence" = "no"))
+
+  
+
+# the following code was used to sort the data by the dates for the report. The dates are filtered after
+# downloading from qualtrics
+
+# request_start_year <- report_temp_request %>% 
+#   filter(year ==2023) %>% 
+#   filter(month %in% c("9", "10", "11", "12"))
+
+
+# request_end_year <- report_temp_request %>% 
+#   filter(year == 2024) %>% 
+#   filter(month %in% c("1", "2", "3", "4", "5", "6", "7", "8"))
+
+# request2023_temp <- bind_rows(request_start_year, request_end_year) %>% 
+
+
+
+write_csv(report_temp_request, "request2024_temp.csv")
+# note, check this csv file to correct the "wooded acres" to numeric
+# the "write csv" code was commented out because changes made on 9/22/2023
+
+#change variable types to correct type
+request_vartype <- read_csv("request2024_temp.csv") %>%
+  mutate(id = as.character(id)) %>% 
+    mutate(
+id = as.character(id),
+# year = as.integer(year),
+# month = as.integer(month),
+# date = as.integer(date),
+region = as.character(region),
+county_name = as.character(county_name),
+firstname = as.character(firstname),
+lastname = as.character(lastname),
+reside_street = as.character(reside_street),
+reside_address = as.character(reside_address),
+phone = as.character(phone),
+email_1 = as.character(email_1),
+email_2 = as.character(email_2),
+property_addr = as.character(property_addr),
+news_radio = as.integer(news_radio),
+postcard = as.integer(postcard),
+brochure = as.integer(brochure),
+fair = as.integer(fair),
+cce = as.integer(cce),
+nyfoa = as.integer(nyfoa),
+forester = as.integer(forester),
+agency = as.integer(agency),
+other = as.integer(other),
+other_detail = as.character(other_detail),
+total_acres = as.integer(total_acres),
+wooded_acres = as.integer(wooded_acres),
+years_owned = as.integer(years_owned),
+reason_beauty = as.integer(reason_beauty),
+reason_nature_biodiv = as.integer(reason_nature_biodiv),
+reason_privacy = as.integer(reason_privacy),
+reason_landinvest = as.integer(reason_landinvest),
+reason_heirs = as.integer(reason_heirs),
+reason_products = as.integer(reason_products),
+reason_hunting = as.integer(reason_hunting),
+reason_recreation = as.integer(reason_recreation),
+typology = as.character(typology),
+nyfoa_member = as.integer(nyfoa_member),
+cfa = as.integer(cfa),
+treefarm = as.integer(treefarm),
+tnc = as.integer(tnc),
+land_conserv = as.integer(land_conserv),
+rgs = as.integer(rgs),
+nwtf = as.integer(nwtf),
+tacf = as.integer(tacf),
+sc = as.integer(sc),
+none = as.integer(none),
+request = as.character(request),
+add_to_cce = as.character(add_to_cce)
+)
+
+request_vartype$email_1 <-tolower(request_vartype$email_1)
+request_vartype$email_2 <-tolower(request_vartype$email_2)
+ 
+
+write_csv(request_vartype, "requested_raw_2024.csv")
+
+```
+

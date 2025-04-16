@@ -1,0 +1,599 @@
+---
+title: "MFO_2022_2023_summary"
+author: "Peter Smalldige"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
+
+
+
+
+The first set of code reads and makes wide the summary reports.
+The second set of code, about line # 444, reads and makes wide the visit request data.
+
+```{r, echo=FALSE, include=FALSE, message=F, eval=T}
+
+
+library(ggpubr)
+library(skimr)
+library(tidyverse)  
+    # includes: tidyr, dplyr, haven, readr, forcats, stringer, ggplot2. 
+    # See all with tidyverse_packages()
+library(readxl)
+library(expss)
+library(knitr)
+library(EnvStats) #prints sample size in graphs
+library(janitor)  #provides "clean_names()
+
+
+
+#
+# ALT plus hypen = <- (within chunk)
+# ctrl plus shift plus m = %>% 
+# ctrl + ALT + I = insert chunk
+# filter rows, select columns
+# RMD comment = <!-- comment -->
+
+
+```
+DATA PREPARATION
+- Download the numerica data from Qualtrics
+- Filter to retain the desired dates for reporting
+- Retain columns = startdate, responseID, and all the reporting data. Delete other leading columns
+
+```{r read data, echo=F, include=T, message=F, eval=T}
+#raw2023 <- read_excel("summary_data_raw_2017_14sept2023_excel_choice_aggreg_multi_remove_pagebreak_modified.xlsx")
+
+#read the data without the double row of headers. use "col_names = F" so that the first data row is not assumed as column names
+#use the filter code to remove the second row of data and retain the common name variables for subsequent testing of the 
+# match of new variable names.
+raw2024_data_report <- read_excel("visit_reports_numeric_sept2023_august2024.xlsx", col_names = F, skip=1) %>% 
+  filter(row_number() != 2)
+
+#read the double road of headers, the second row input becomes the "data". First row is  Qualtrics labels.
+raw2024_names_report <- read_excel("visit_reports_numeric_sept2023_august2024.xlsx", n_max=1)
+raw2024_names_report <- raw2024_names_report [-1,] #this removes the data and saves the Qualtrics labels to match with the variable names
+
+#use the csv file to look at the labels and to create the code in the next chunk for renaming, if changes are needed.
+write_csv(raw2024_names_report, "names_report_header_2024.csv")
+
+
+# this code replaces the qualitrics lables with user friendly labels
+names_clean01 <- raw2024_names_report %>% 
+# rename(date = StartDate)
+    rename(
+date	=	StartDate	,
+ Id	=	ResponseId	,
+mfo_name	=	Q2	,
+county_mfo	=	Q3	,
+mfo_email	=	Q4	,
+other_mfo	=	Q44	,
+other_email	=	Q45	,
+visit_date	=	Q5	,
+owner_name	=	Q6	,
+reside_street	=	Q7	,
+reside_city	=	Q8	,
+reside_state	=	Q33...12	,
+reside_zip	=	Q32	,
+phone	=	Q9	,
+owner_email	=	Q10	,
+wooded_acres	=	Q11	,
+years	=	Q14	,
+town	=	Q12	,
+county_owner	=	Q13	,
+newspaper	=	Q38_1_1...20	,
+postcard	=	Q38_2_1...21	,
+fair	=	Q38_3_1...22	,
+CCE	=	Q38_4_1...23	,
+NYFOA	=	Q38_5_1...24	,
+forester	=	Q38_6_1	,
+agency	=	Q38_7_1	,
+other	=	Q38_8_1	,
+other_detail	=	Q31	,
+timber	=	Q54_1_1	,
+recreation	=	Q54_2_1	,
+privacy_rural	=	Q54_3_1	,
+property	=	Q54_4_1	,
+firewood	=	Q54_5_1	,
+wildlife_view	=	Q54_6_1	,
+hunting	=	Q54_7_1	,
+agrof	=	Q54_8_1	,
+other_why	=	Q54_9_1	,
+other_why_detail	=	Q39	,
+plan_written	=	Q18_1	,
+plan_unwritten	=	Q18_2	,
+plan_intended	=	Q18_3	,
+plan_no	=	Q18_4	,
+discuss_cont_forester	=	Q38_1_1...43	,
+discuss_cont_surveyor	=	Q38_2_1...44	,
+discuss_cont_logger	=	Q38_3_1...45	,
+discuss_cont_entomol	=	Q38_4_1...46	,
+discuss_cont_fvm	=	Q38_5_1...47	,
+discuss_prod_commercial	=	Q39_1_1	,
+discuss_prod_firewoodpersonal	=	Q39_2_1	,
+discuss_prod_firewoodcomm	=	Q39_3_1	,
+discuss_prod_Christmas	=	Q39_4_1	,
+discuss_prod_income	=	Q39_5_1	,
+discuss_prod_maple	=	Q39_6_1	,
+discuss_prod_mushrooms	=	Q39_7_1	,
+discuss_prod_silvopasture	=	Q39_8_1	,
+discuss_prod_ginseng	=	Q39_9_1	,
+discuss_kasa_biodiversity	=	Q40_1_1	,
+discuss_kasa_deermore	=	Q40_2_1	,
+discuss_kasa_deerimpacts	=	Q40_3_1	,
+discuss_kasa_regen	=	Q40_4_1	,
+discuss_kasa_herbicides	=	Q40_5_1	,
+discuss_kasa_hunters	=	Q40_6_1	,
+discuss_kasa_hunting	=	Q40_7_1	,
+discuss_kasa_fvm	=	Q40_8_1	,
+discuss_kasa_entomol	=	Q40_9_1	,
+discuss_kasa_episodic	=	Q40_10_1	,
+discuss_kasa_obj	=	Q40_11_1	,
+discuss_kasa_plantconifer	=	Q40_12_1	,
+discuss_kasa_planthdwd	=	Q40_13_1	,
+discuss_kasa_pond	=	Q40_14_1	,
+discuss_kasa_chainsaw	=	Q40_15_1	,
+discuss_kasa_streams	=	Q40_16_1	,
+discuss_kasa_thinning	=	Q40_17_1	,
+discuss_kasa_theft	=	Q40_18_1	,
+discuss_kasa_trails	=	Q40_19_1	,
+discuss_kasa_health	=	Q40_20_1	,
+discuss_kasa_dendro	=	Q40_21_1	,
+discuss_kasa_vernal	=	Q40_22_1	,
+discuss_kasa_habitat	=	Q40_23_1	,
+discuss_steward	=	Q41_1_1	,
+discuss_480a	=	Q41_2_1	,
+discuss_estate	=	Q41_3_1	,
+problems	=	Q20	,
+action_cont_forester	=	Q46_1_1	,
+action_cont_surveyor	=	Q46_2_1	,
+action_cont_logger	=	Q46_3_1	,
+action_cont_entomol	=	Q46_4_1	,
+action_cont_fvm	=	Q46_5_1	,
+action_mgmt_apple	=	Q45_1_1	,
+action_mgmt_deerfence	=	Q45_2_1	,
+action_mgmt_deerhunting	=	Q45_3_1	,
+action_mgmt_firewood	=	Q45_4_1	,
+action_mgmt_foodplots	=	Q45_5_1	,
+action_mgmt_insects	=	Q45_6_1	,
+action_mgmt_commercialharvest	=	Q45_7_1	,
+action_mgmt_personalharvest	=	Q45_8_1	,
+action_mgmt_fvm_chem	=	Q45_9_1	,
+action_mgmt_fvm_mech	=	Q45_10_1	,
+action_mgmt_pond	=	Q45_11_1	,
+action_mgmt_thinning	=	Q45_12_1	,
+action_mgmt_growtimber	=	Q45_13_1	,
+action_mgmt_trails	=	Q45_14_1	,
+action_mgmt_plantationestablish	=	Q45_15_1	,
+action_mgmt_plantationprotection	=	Q45_16_1	,
+action_mgmt_vernal	=	Q45_17_1	,
+action_mgmt_bmp	=	Q45_18_1	,
+action_mgmt_habitat	=	Q45_19_1	,
+action_prod_firewood	=	Q48_1_1	,
+action_prod_huntlease	=	Q48_2_1	,
+action_prod_maple	=	Q48_3_1	,
+action_prod_ginseng	=	Q48_4_1	,
+action_prod_mushrooms	=	Q48_5_1	,
+action_prod_silvopasture	=	Q48_6_1	,
+action_prod_timber	=	Q48_7_1	,
+educ_nyfoa	=	Q49_1_1	,
+educ_events	=	Q49_2_1	,
+educ_written	=	Q49_3_1	,
+educ_internet	=	Q49_4_1	,
+educ_webinars	=	Q49_5_1	,
+action_mgmtplan	=	Q50_1_1	,
+action_estateplan	=	Q50_2_1	,
+action_writeobj	=	Q50_3_1	,
+action_costshare	=	Q50_4_1	,
+action_managehunters	=	Q50_5_1	,
+action_survey	=	Q50_6_1	,
+action_boundaries	=	Q50_7_1	,
+action_contactlandtrust	=	Q50_8_1	,
+action_contactestateplanner	=	Q50_9_1	,
+action_other	=	Q33...129	,
+member_nyfoa	=	Q32_1_1	,
+member_cfa	=	Q32_2_1	,
+member_treefarm	=	Q32_3_1	,
+member_tnc	=	Q32_4_1	,
+member_landtrust	=	Q32_5_1	,
+member_audubon	=	Q32_6_1	,
+member_rgs	=	Q32_7_1	,
+member_nwtf	=	Q32_8_1	,
+member_tacf	=	Q32_9_1	,
+member_sc	=	Q32_10_1	,
+member_na	=	Q32_11_1	,
+join_nyfoa	=	Q34_1_1	,
+join_cfa	=	Q34_2_1	,
+join_treefarm	=	Q34_3_1	,
+join_tnc	=	Q34_4_1	,
+join_landtrust	=	Q34_5_1	,
+join_audubon	=	Q34_6_1	,
+join_rgs	=	Q34_7_1	,
+join_nwtf	=	Q34_8_1	,
+join_tacf	=	Q34_9_1	,
+join_sc	=	Q34_10_1	,
+join_na	=	Q34_11_1	,
+hours	=	Q23_1	,
+miles	=	Q23_2	,
+thoughts	=	Q24	,
+office	=	Q25	 
+
+    )
+
+#create an output file, then assign the modified variable names to the output file
+raw_report <- raw2024_data_report
+names(raw_report) <- names(names_clean01)
+    write_csv(raw_report, "test_report_variable_name_alignment.csv")
+
+# on 9/9/2024 the alignment of variable names was confirmed
+
+```
+
+rename variables...newname = oldname
+
+
+
+```{r}
+raw_report <- raw_report[-1,] %>% 
+  select(-date) %>% 
+mutate(
+  county_owner = fct_recode(county_owner,  #name and code number were corrected 9/9/2024
+      "Albany" = "1",
+      "Allegany" = "2",
+
+      "Broome" = "3",
+      "Cattaraugus" = "4",
+      "Cayuga" = "5",
+      "Chautauqua" = "6",
+      "Chemung" = "7",
+      "Chenango" = "8",
+      "Clinton" = "9",
+      "Columbia" = "10",
+      "Cortland" = "11",
+      "Delaware" = "12",
+      "Dutchess" = "13",
+      "Erie" = "14",
+      "Essex" = "15",
+      "Franklin" = "16",
+      "Fulton" = "17",
+      "Genesee" = "18",
+      "Greene" = "19",
+      "Hamilton" = "20",
+      "Herkimer" = "21",
+      "Jefferson" = "22",
+ 
+      "Lewis" = "23",
+      "Livingston" = "24",
+      "Madison" = "25",
+      "Monroe" = "26",
+      "Montgomery" = "27",
+      "Nassau" = "28",
+      "NYC_New_York" = "29",
+      "Niagara" = "30",
+      "Oneida" = "31",
+      "Onondaga" = "32",
+      "Ontario" = "33",
+      "Orange" = "34",
+      "Orleans" = "35",
+      "Oswego" = "36",
+      "Otsego" = "37",
+      "Putnam" = "38",
+ 
+      "Rensselaer" = "39",
+       
+      "Rockland" = "40",
+      "Saratoga" = "41",
+      "Schenectady" = "42",
+      "Schoharie" = "43",
+      "Schuyler" = "44",
+      "Seneca" = "45",
+      "St Lawrence" = "46",
+      
+      "Steuben" = "47",
+      "Suffolk" = "48",
+      "Sullivan" = "49",
+      "Tioga" = "50",
+      "Tompkins" = "51",
+      "Ulster" = "52",
+      "Warren" = "53",
+      "Washington" = "54",
+      "Wayne" = "55",
+      "Westchester" = "56",
+      "Wyoming" = "57",
+      "Yates" = "58",
+      "Other" = "59"
+  ))%>% 
+mutate(
+  county_mfo = fct_recode(county_mfo,
+      "Albany" = "1",
+      "Allegany" = "2",
+
+      "Broome" = "3",
+      "Cattaraugus" = "4",
+      "Cayuga" = "5",
+      "Chautauqua" = "6",
+      "Chemung" = "7",
+      "Chenango" = "8",
+      "Clinton" = "9",
+      "Columbia" = "10",
+      "Cortland" = "11",
+      "Delaware" = "12",
+      "Dutchess" = "13",
+      "Erie" = "14",
+      "Essex" = "15",
+      "Franklin" = "16",
+      "Fulton" = "17",
+      "Genesee" = "18",
+      "Greene" = "19",
+      "Hamilton" = "20",
+      "Herkimer" = "21",
+      "Jefferson" = "22",
+ 
+      "Lewis" = "23",
+      "Livingston" = "24",
+      "Madison" = "25",
+      "Monroe" = "26",
+      "Montgomery" = "27",
+      "Nassau" = "28",
+      "NYC_New_York" = "29",
+      "Niagara" = "30",
+      "Oneida" = "31",
+      "Onondaga" = "32",
+      "Ontario" = "33",
+      "Orange" = "34",
+      "Orleans" = "35",
+      "Oswego" = "36",
+      "Otsego" = "37",
+      "Putnam" = "38",
+ 
+      "Rensselaer" = "39",
+       
+      "Rockland" = "40",
+      "Saratoga" = "41",
+      "Schenectady" = "42",
+      "Schoharie" = "43",
+      "Schuyler" = "44",
+      "Seneca" = "45",
+      "St Lawrence" = "46",
+      
+      "Steuben" = "47",
+      "Suffolk" = "48",
+      "Sullivan" = "49",
+      "Tioga" = "50",
+      "Tompkins" = "51",
+      "Ulster" = "52",
+      "Warren" = "53",
+      "Washington" = "54",
+      "Wayne" = "55",
+      "Westchester" = "56",
+      "Wyoming" = "57",
+      "Yates" = "58",
+      "Other" = "59"
+  ))
+
+
+
+```
+
+
+```{r add_region, echo=F, include=T, message=F, eval=T}
+capital <- raw_report %>% 
+  filter(county_mfo %in% c("Albany", "Clinton", "Essex", "Franklin", "Fulton", "Hamilton", 
+                           "Montgomery", "Rensselaer", "Saratoga", "Schenectady", "Warren", 
+                           "Washington")) %>% 
+  mutate(region = "Capital_E_ADK")
+
+catskill <- raw_report %>% 
+  filter(county_mfo %in% c("Columbia","Delaware","Dutchess","Greene","Orange",
+                           "Otsego","Putnam","Rockland","Schoharie","Sullivan","Ulster","Westchester",
+                           "New York City")) %>% 
+  mutate(region = "Catskill_L_Hudson")
+
+central <- raw_report %>% 
+  filter(county_mfo %in% c("Cayuga","Herkimer","Jefferson","Lewis","Madison",
+                           "Oneida","Onondaga","Oswego","St Lawrence" )) %>% 
+  mutate(region = "Central_W_ADK")
+
+northwest <- raw_report %>% 
+  filter(county_mfo %in% c("Erie","Genesee","Livingston","Monroe",
+                           "Niagara","Ontario","Orleans","Seneca","Wayne","Wyoming","Yates")) %>% 
+  mutate(region = "Northwest")
+
+southern <- raw_report %>% 
+  filter(county_mfo %in% c("Allegany","Broome","Cattaraugus","Chautauqua",
+                           "Chemung","Chenango","Cortland","Schuyler","Steuben",
+                           "Tioga","Tompkins")) %>% 
+  mutate(region = "Southern_Tier")
+
+report_temp <- bind_rows(catskill, central, northwest, southern, capital) %>% 
+  select(Id, region, county_mfo, mfo_name, mfo_email, everything())
+  
+# report_prior_year <- report_temp %>% 
+#   filter(year ==2022) %>% 
+#   filter(month %in% c("9", "10", "11", "12"))
+# 
+# report_current_year <- report_temp %>% 
+#   filter(year == 2023) %>% 
+#   filter(month %in% c("1", "2", "3", "4", "5", "6", "7", "8"))
+
+# report2023_temp <- bind_rows(report_prior_year, report_current_year) 
+# write_csv(report2023_temp, "report2023_temp.csv")
+# corrected alpha in numeric columns on 9/22/2023, check each year
+
+
+report2024 <- report_temp%>% 
+  mutate(
+    id = as.character(Id),
+region = as.character(region),
+county_mfo = as.character(county_mfo),
+mfo_name = as.character(mfo_name),
+mfo_email = as.character(mfo_email),
+other_mfo = as.character(other_mfo),
+other_email = as.character(other_email),
+visit_date = as.character(visit_date),
+owner_name = as.character(owner_name),
+reside_street = as.character(reside_street),
+reside_city = as.character(reside_city),
+reside_state = as.character(reside_state),
+reside_zip = as.character(reside_zip),
+phone = as.character(phone),
+owner_email = as.character(owner_email),
+wooded_acres = as.integer(wooded_acres),
+years = as.integer(years),
+town = as.character(town),
+county_owner = as.character(county_owner),
+newspaper = as.integer(newspaper),
+postcard = as.integer(postcard),
+fair = as.integer(fair),
+CCE = as.integer(CCE),
+NYFOA = as.integer(NYFOA),
+forester = as.integer(forester),
+agency = as.integer(agency),
+other = as.integer(other),
+other_detail = as.character(other_detail),
+timber = as.integer(timber),
+recreation = as.integer(recreation),
+privacy_rural = as.integer(privacy_rural),
+property = as.integer(property),
+firewood = as.integer(firewood),
+wildlife_view = as.integer(wildlife_view),
+hunting = as.integer(hunting),
+agrof = as.integer(agrof),
+other_why = as.integer(other_why),
+other_why_detail = as.character(other_why_detail),
+plan_written = as.integer(plan_written),
+plan_unwritten = as.integer(plan_unwritten),
+plan_intended = as.integer(plan_intended),
+plan_no = as.integer(plan_no),
+discuss_cont_forester = as.integer(discuss_cont_forester),
+discuss_cont_surveyor = as.integer(discuss_cont_surveyor),
+discuss_cont_logger = as.integer(discuss_cont_logger),
+discuss_cont_entomol = as.integer(discuss_cont_entomol),
+discuss_cont_fvm = as.integer(discuss_cont_fvm),
+discuss_prod_commercial = as.integer(discuss_prod_commercial),
+discuss_prod_firewoodpersonal = as.integer(discuss_prod_firewoodpersonal),
+discuss_prod_firewoodcomm = as.integer(discuss_prod_firewoodcomm),
+discuss_prod_Christmas = as.integer(discuss_prod_Christmas),
+discuss_prod_income = as.integer(discuss_prod_income),
+discuss_prod_maple = as.integer(discuss_prod_maple),
+discuss_prod_mushrooms = as.integer(discuss_prod_mushrooms),
+discuss_prod_silvopasture = as.integer(discuss_prod_silvopasture),
+discuss_prod_ginseng = as.integer(discuss_prod_ginseng),
+discuss_kasa_biodiversity = as.integer(discuss_kasa_biodiversity),
+discuss_kasa_deermore = as.integer(discuss_kasa_deermore),
+discuss_kasa_deerimpacts = as.integer(discuss_kasa_deerimpacts),
+discuss_kasa_regen = as.integer(discuss_kasa_regen),
+discuss_kasa_herbicides = as.integer(discuss_kasa_herbicides),
+discuss_kasa_hunters = as.integer(discuss_kasa_hunters),
+discuss_kasa_hunting = as.integer(discuss_kasa_hunting),
+discuss_kasa_fvm = as.integer(discuss_kasa_fvm),
+discuss_kasa_entomol = as.integer(discuss_kasa_entomol),
+discuss_kasa_episodic = as.integer(discuss_kasa_episodic),
+discuss_kasa_obj = as.integer(discuss_kasa_obj),
+discuss_kasa_plantconifer = as.integer(discuss_kasa_plantconifer),
+discuss_kasa_planthdwd = as.integer(discuss_kasa_planthdwd),
+discuss_kasa_pond = as.integer(discuss_kasa_pond),
+discuss_kasa_chainsaw = as.integer(discuss_kasa_chainsaw),
+discuss_kasa_streams = as.integer(discuss_kasa_streams),
+discuss_kasa_thinning = as.integer(discuss_kasa_thinning),
+discuss_kasa_theft = as.integer(discuss_kasa_theft),
+discuss_kasa_trails = as.integer(discuss_kasa_trails),
+discuss_kasa_health = as.integer(discuss_kasa_health),
+discuss_kasa_dendro = as.integer(discuss_kasa_dendro),
+discuss_kasa_vernal = as.integer(discuss_kasa_vernal),
+discuss_kasa_habitat = as.integer(discuss_kasa_habitat),
+discuss_steward = as.integer(discuss_steward),
+discuss_480a = as.integer(discuss_480a),
+discuss_estate = as.integer(discuss_estate),
+problems = as.character(problems),
+action_cont_forester = as.integer(action_cont_forester),
+action_cont_surveyor = as.integer(action_cont_surveyor),
+action_cont_logger = as.integer(action_cont_logger),
+action_cont_entomol = as.integer(action_cont_entomol),
+action_cont_fvm = as.integer(action_cont_fvm),
+action_mgmt_apple = as.integer(action_mgmt_apple),
+action_mgmt_deerfence = as.integer(action_mgmt_deerfence),
+action_mgmt_deerhunting = as.integer(action_mgmt_deerhunting),
+action_mgmt_firewood = as.integer(action_mgmt_firewood),
+action_mgmt_foodplots = as.integer(action_mgmt_foodplots),
+action_mgmt_insects = as.integer(action_mgmt_insects),
+action_mgmt_commercialharvest = as.integer(action_mgmt_commercialharvest),
+action_mgmt_personalharvest = as.integer(action_mgmt_personalharvest),
+action_mgmt_fvm_chem = as.integer(action_mgmt_fvm_chem),
+action_mgmt_fvm_mech = as.integer(action_mgmt_fvm_mech),
+action_mgmt_pond = as.integer(action_mgmt_pond),
+action_mgmt_thinning = as.integer(action_mgmt_thinning),
+action_mgmt_growtimber = as.integer(action_mgmt_growtimber),
+action_mgmt_trails = as.integer(action_mgmt_trails),
+action_mgmt_plantationestablish = as.integer(action_mgmt_plantationestablish),
+action_mgmt_plantationprotection = as.integer(action_mgmt_plantationprotection),
+action_mgmt_vernal = as.integer(action_mgmt_vernal),
+action_mgmt_bmp = as.integer(action_mgmt_bmp),
+action_mgmt_habitat = as.integer(action_mgmt_habitat),
+action_prod_firewood = as.integer(action_prod_firewood),
+action_prod_huntlease = as.integer(action_prod_huntlease),
+action_prod_maple = as.integer(action_prod_maple),
+action_prod_ginseng = as.integer(action_prod_ginseng),
+action_prod_mushrooms = as.integer(action_prod_mushrooms),
+action_prod_silvopasture = as.integer(action_prod_silvopasture),
+action_prod_timber = as.integer(action_prod_timber),
+educ_nyfoa = as.integer(educ_nyfoa),
+educ_events = as.integer(educ_events),
+educ_written = as.integer(educ_written),
+educ_internet = as.integer(educ_internet),
+educ_webinars = as.integer(educ_webinars),
+action_mgmtplan = as.integer(action_mgmtplan),
+action_estateplan = as.integer(action_estateplan),
+action_writeobj = as.integer(action_writeobj),
+action_costshare = as.integer(action_costshare),
+action_managehunters = as.integer(action_managehunters),
+action_survey = as.integer(action_survey),
+action_boundaries = as.integer(action_boundaries),
+action_contactlandtrust = as.integer(action_contactlandtrust),
+action_contactestateplanner = as.integer(action_contactestateplanner),
+action_other = as.character(action_other),
+member_nyfoa = as.integer(member_nyfoa),
+member_cfa = as.integer(member_cfa),
+member_treefarm = as.integer(member_treefarm),
+member_tnc = as.integer(member_tnc),
+member_landtrust = as.integer(member_landtrust),
+member_audubon = as.integer(member_audubon),
+member_rgs = as.integer(member_rgs),
+member_nwtf = as.integer(member_nwtf),
+member_tacf = as.integer(member_tacf),
+member_sc = as.integer(member_sc),
+member_na = as.integer(member_na),
+join_nyfoa = as.integer(join_nyfoa),
+join_cfa = as.integer(join_cfa),
+join_treefarm = as.integer(join_treefarm),
+join_tnc = as.integer(join_tnc),
+join_landtrust = as.integer(join_landtrust),
+join_audubon = as.integer(join_audubon),
+join_rgs = as.integer(join_rgs),
+join_nwtf = as.integer(join_nwtf),
+join_tacf = as.integer(join_tacf),
+join_sc = as.integer(join_sc),
+join_na = as.integer(join_na),
+hours = as.numeric(hours),
+miles = as.numeric(miles),
+thoughts = as.character(thoughts)
+  )
+
+report2024$owner_email <-tolower(report2024$owner_email)
+
+  
+write_csv(report2024, "data_reported_2023_2024.csv")
+```
+

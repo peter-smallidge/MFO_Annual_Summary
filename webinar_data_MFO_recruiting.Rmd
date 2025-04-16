@@ -1,0 +1,76 @@
+---
+title: "MFO renewal sorting"
+author: "Peter Smalldige"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r read data, echo=F, include=T, message=F, eval=T}
+# library(ggplot2)
+# library(ggpubr)
+# library(expss)
+library(readr)
+library(readxl)
+library(writexl)
+# library(skimr)
+ library(tidyverse)  # includes: tidyr, dplyr, haven, readr, readxl, forcats, stringer, ggplot2. See all with tidyverse_packages()
+# library(knitr)
+# library(janitor)
+
+```
+
+
+```{r echo = FALSE}
+# Create Paths
+
+file_path_input <- "C:\\Users\\pjs23\\Documents\\Projects\\MFO Volunteer\\On-line annual training\\training 2025\\webinar data owners ny 2023 and 2024.xlsx"
+
+
+output_folder <- "C:\\Users\\pjs23\\Documents\\Projects\\MFO Volunteer\\On-line annual training\\training 2025"
+
+```
+
+read raw data from MFO folder, retain NY Woodland Owners
+
+```{r read data, echo=F, include=T, message=F, eval=T}
+
+#the data from the 2024 database of active and inactive volunteers. The list of last year's volunteers.
+rawdata <- read_excel(file_path_input, sheet = "Sheet1", skip=0) %>%
+  filter(state == "NY" & perspective == "Woodland Owner") %>% 
+  drop_na(perspective) %>% 
+  mutate(
+    state = str_to_lower(state),
+    perspective = str_to_lower(perspective),
+    email = str_to_lower(email),
+    count = 1
+  ) %>% 
+  arrange(email) %>% 
+  group_by(email) %>% 
+  summarize(
+    total = sum(count),
+    first = first(first),
+    last = first(last),
+    state = first(state),
+    email = first(email),
+    perspective = first(perspective)
+  )
+  
+
+
+```
+
+
+
+
+```{r}
+#change the name of the output file to today's date
+output_file <- file.path(output_folder, paste0("webinar_NY_2023_2024", ".xlsx"))
+
+write_xlsx(rawdata, output_file)
+           
+```
+
